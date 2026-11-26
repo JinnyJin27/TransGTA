@@ -130,7 +130,7 @@ for(const id of ['sTop','sH','sSide','sGap','sBright']) $(id).value=store.get(id
 const showVals=()=>{$('gapV').textContent=$('sGap').value;$('brV').textContent=$('sBright').value};
 showVals();
 for(const id of ['sTop','sH','sSide','sGap','sBright']) $(id).addEventListener('input',()=>{store.set(id,$(id).value);showVals();updateBox();S.lastMask=null});
-$('btnSave').onclick=()=>{store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');setStatus('บันทึกแล้ว','ok')};
+$('btnSave').onclick=()=>{store.set('thinkMode','0');store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');setStatus('บันทึกแล้ว','ok')};
 if(!$('key').value) $('setDet').open=true;
 const ttsBtn=()=>$('btnTts').textContent='🔈 อ่านออกเสียง: '+(S.tts?'เปิด':'ปิด');
 ttsBtn();
@@ -236,8 +236,10 @@ If there is no readable subtitle, return has_text=false and empty strings.`;
 // thinking modes to try, fastest first: 0 = thinkingBudget 0, 1 = thinkingLevel minimal, 2 = none
 async function callGemini(b64,prompt){
   const key=store.get('key',''),model=store.get('model','gemini-flash-lite-latest');
-  const gen={temperature:0.3,responseMimeType:'application/json'};
+  // compatibility modes, tried in order until one works: 0 thinkingBudget 0 · 1 thinkingLevel minimal · 2 no thinking setting · 3 plain (no JSON mode)
   const tm=+store.get('thinkMode','0');
+  const gen={temperature:0.3};
+  if(tm<3)gen.responseMimeType='application/json';
   if(tm===0)gen.thinkingConfig={thinkingBudget:0};
   else if(tm===1)gen.thinkingConfig={thinkingLevel:'minimal'};
   const parts=[{text:prompt}];if(b64)parts.push({inlineData:{mimeType:'image/jpeg',data:b64}});
@@ -256,7 +258,7 @@ async function callGemini(b64,prompt){
   const data=await res.json().catch(()=>({}));
   if(!res.ok){
     const msg=data.error?.message||('HTTP '+res.status);
-    if(res.status===400&&/thinking/i.test(msg)&&tm<2){store.set('thinkMode',String(tm+1));return callGemini(b64,prompt)}
+    if(res.status===400&&!/api key/i.test(msg)&&tm<3){log('โหมด '+tm+' ใช้ไม่ได้ ('+msg+') ลองโหมด '+(tm+1));store.set('thinkMode',String(tm+1));return callGemini(b64,prompt)}
     const err=new Error(msg);err.status=res.status;throw err;
   }
   const txt=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').replace(/```json|```/g,'').trim();
@@ -312,6 +314,7 @@ function log(msg,detail){
   $('logBox').textContent=logs.join('\n');
 }
 $('btnTest').onclick=async()=>{
+  store.set('thinkMode','0');
   store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');
   setStatus('กำลังทดสอบ...');
   try{const t=await callGemini(null,'Return JSON {"has_text":true,"speaker":"","en":"ok","th":"ใช้งานได้"}');
