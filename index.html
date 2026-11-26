@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GTA Sub แปลไทย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0c0e13;--panel:#161a23;--line:#262b38;--ink:#f3f3f5;--mut:#9aa1b0;--acc:#ff5fa2;--ok:#43d39e;--warn:#ffb020;--err:#ff5d5d}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'Sarabun',system-ui,sans-serif}
+header{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+h1{font-size:18px;margin:0}
+main{max-width:900px;margin:0 auto;padding:12px}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:10px 16px;min-height:44px;cursor:pointer;background:#2a3040;color:var(--ink)}
+button.pri{background:var(--acc);color:#16070e}
+button.big{font-size:18px;padding:12px 22px}
+button:disabled{opacity:.5}
+input[type=text],input[type=password],select{font:inherit;font-size:16px;width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0f1219;color:var(--ink)}
+label{display:block;font-size:14px;color:var(--mut);margin:10px 0 4px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+#cur{min-height:150px;display:flex;flex-direction:column;justify-content:center}
+#curSpk{color:var(--acc);font-weight:700;font-size:15px}
+#curTh{font-size:clamp(24px,6vw,36px);font-weight:700;line-height:1.3}
+#curEn{color:var(--mut);font-size:15px;margin-top:6px}
+#status{font-size:13px;padding:4px 10px;border-radius:99px;background:#232836;color:var(--mut);white-space:nowrap}
+#status.ok{color:var(--ok)}#status.warn{color:var(--warn)}#status.err{color:var(--err)}
+#wrap{position:relative;border-radius:12px;overflow:hidden;background:#000}
+#wrap video{display:block;width:100%;height:auto}
+#box{position:absolute;border:2px solid var(--acc);box-shadow:0 0 0 9999px rgba(0,0,0,.45);border-radius:6px;pointer-events:none}
+#thumb{width:100%;max-height:70px;object-fit:contain;background:#000;border-radius:8px;margin-top:8px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 14px}
+#hist{list-style:none;margin:0;padding:0;max-height:50vh;overflow-y:auto}
+#hist li{padding:10px 0;border-bottom:1px solid var(--line)}
+#hist .th{font-size:18px;font-weight:600}
+#hist .en{font-size:13px;color:var(--mut)}
+#hist .sp{color:var(--acc);font-weight:700;font-size:13px}
+.hint{font-size:13px;color:var(--mut)}
+details summary{cursor:pointer;font-weight:600;min-height:32px}
+.hide{display:none!important}
+@media(max-width:560px){.grid2{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎮 GTA Sub แปลไทย</h1>
+  <span id="status">ยังไม่เริ่ม</span>
+</header>
+<main>
+  <section class="card" id="cur">
+    <div id="curSpk"></div>
+    <div id="curTh">กด "เริ่ม" แล้วหันกล้องไปที่ซับบนทีวี</div>
+    <div id="curEn"></div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <button id="btnStart" class="pri big">▶ เริ่ม</button>
+      <button id="btnNow" class="big" disabled>📸 แปลตอนนี้</button>
+      <button id="btnAuto" disabled>อัตโนมัติ: เปิด</button>
+      <button id="btnTts">🔈 อ่านออกเสียง: ปิด</button>
+    </div>
+    <p class="hint" id="quota">ส่งไปแปลแล้ว 0 ครั้งในรอบนี้</p>
+  </section>
+
+  <section class="card">
+    <details id="camDet" open>
+      <summary>📷 กล้อง &amp; กรอบซับ</summary>
+      <div id="wrap" class="hide"><video id="vid" playsinline muted autoplay></video><div id="box"></div></div>
+      <img id="thumb" class="hide" alt="ภาพที่ส่งไปแปล">
+      <div class="grid2">
+        <div><label for="sTop">ตำแหน่งบน-ล่างของกรอบ</label><input id="sTop" type="range" min="0" max="95" value="72"></div>
+        <div><label for="sH">ความสูงกรอบ</label><input id="sH" type="range" min="5" max="60" value="18"></div>
+        <div><label for="sSide">ขอบซ้าย-ขวา</label><input id="sSide" type="range" min="0" max="45" value="10"></div>
+        <div id="zoomBox" class="hide"><label for="sZoom">ซูมกล้อง</label><input id="sZoom" type="range" min="1" max="5" step="0.1" value="1"></div>
+      </div>
+      <p class="hint">ปรับให้กรอบสีชมพูครอบแถบซับพอดี ยิ่งครอบแคบยิ่งแปลแม่นและเร็ว</p>
+    </details>
+  </section>
+
+  <section class="card">
+    <details id="setDet">
+      <summary>⚙️ ตั้งค่า (ใส่ API Key ครั้งแรกที่นี่)</summary>
+      <label for="key">Gemini API Key (เก็บไว้ในเครื่องนี้เท่านั้น)</label>
+      <input id="key" type="password" placeholder="AIza..." autocomplete="off">
+      <label for="model">ชื่อโมเดล</label>
+      <input id="model" type="text" value="gemini-flash-latest">
+      <div class="grid2">
+        <div><label for="sGap">เว้นระยะส่งขั้นต่ำ: <b id="gapV">4</b> วิ</label><input id="sGap" type="range" min="2" max="12" value="4"></div>
+        <div><label for="sBright">ความสว่างตัวหนังสือ (ลดลงถ้าแอปไม่ยอมแปล): <b id="brV">170</b></label><input id="sBright" type="range" min="90" max="240" value="170"></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button id="btnSave" class="pri">บันทึก</button><button id="btnTest">ทดสอบ Key</button></div>
+      <p class="hint">ไม่มี key? เข้า aistudio.google.com → Get API key → Create API key (ฟรี)</p>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between"><b>ประวัติบทพูด</b><button id="btnClear">ล้าง</button></div>
+    <ul id="hist"></ul>
+  </section>
+</main>
+<canvas id="cBig" class="hide"></canvas><canvas id="cSmall" width="96" height="24" class="hide"></canvas>
+<script>
+{
+const $ = id => document.getElementById(id);
+const vid=$('vid'), box=$('box'), cBig=$('cBig'), cSmall=$('cSmall');
+const ctxB=cBig.getContext('2d'), ctxS=cSmall.getContext('2d',{willReadFrequently:true});
+const store={get(k,d){try{const v=localStorage.getItem('gtasub_'+k);return v===null?d:v}catch(e){return d}},set(k,v){try{localStorage.setItem('gtasub_'+k,v)}catch(e){}}};
+
+const S={running:false,auto:true,tts:store.get('tts','0')==='1',busy:false,lastSend:0,backoffUntil:0,
+  lastMask:null,prevMask:null,lastEn:'',history:[],count:0,noThinking:store.get('noThink','0')==='1',track:null,wake:null,timer:null};
+
+// ---------- settings ----------
+$('key').value=store.get('key','');
+$('model').value=store.get('model','gemini-flash-latest');
+for(const id of ['sTop','sH','sSide','sGap','sBright']) $(id).value=store.get(id,$(id).value);
+const showVals=()=>{$('gapV').textContent=$('sGap').value;$('brV').textContent=$('sBright').value};
+showVals();
+for(const id of ['sTop','sH','sSide','sGap','sBright']) $(id).addEventListener('input',()=>{store.set(id,$(id).value);showVals();updateBox();S.lastMask=null});
+$('btnSave').onclick=()=>{store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-latest');setStatus('บันทึกแล้ว','ok')};
+if(!$('key').value) $('setDet').open=true;
+const ttsBtn=()=>$('btnTts').textContent='🔈 อ่านออกเสียง: '+(S.tts?'เปิด':'ปิด');
+ttsBtn();
+$('btnTts').onclick=()=>{S.tts=!S.tts;store.set('tts',S.tts?'1':'0');ttsBtn();if(S.tts)speak('เปิดเสียงอ่านภาษาไทยแล้ว')};
+$('btnAuto').onclick=()=>{S.auto=!S.auto;$('btnAuto').textContent='อัตโนมัติ: '+(S.auto?'เปิด':'ปิด');setStatus(S.auto?'โหมดอัตโนมัติ':'โหมดกดเอง','ok')};
+$('btnClear').onclick=()=>{S.history=[];renderHist()};
+
+function setStatus(t,cls){const s=$('status');s.textContent=t;s.className=cls||''}
+function updateBox(){
+  const top=+$('sTop').value,h=+$('sH').value,side=+$('sSide').value;
+  const hh=Math.min(h,100-top);
+  Object.assign(box.style,{top:top+'%',height:hh+'%',left:side+'%',width:(100-2*side)+'%'});
+}
+updateBox();
+
+// ---------- camera ----------
+async function startCam(){
+  if(!navigator.mediaDevices?.getUserMedia){setStatus('เบราว์เซอร์นี้เปิดกล้องไม่ได้ (ต้องเป็น https)','err');return false}
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+    vid.srcObject=st;await vid.play();
+    S.track=st.getVideoTracks()[0];
+    $('wrap').classList.remove('hide');
+    const caps=S.track.getCapabilities?S.track.getCapabilities():{};
+    if(caps.zoom){const z=$('sZoom');z.min=caps.zoom.min;z.max=Math.min(caps.zoom.max,8);z.step=caps.zoom.step||0.1;
+      z.value=store.get('zoom',caps.zoom.min);$('zoomBox').classList.remove('hide');
+      const apply=()=>{S.track.applyConstraints({advanced:[{zoom:+z.value}]}).catch(()=>{});store.set('zoom',z.value);S.lastMask=null};
+      z.oninput=apply;apply();}
+    return true;
+  }catch(e){setStatus('เปิดกล้องไม่ได้: '+e.name,'err');return false}
+}
+async function keepAwake(){try{if('wakeLock' in navigator)S.wake=await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.running)keepAwake()});
+
+$('btnStart').onclick=async()=>{
+  if(S.running){stop();return}
+  if(!store.get('key','')){$('setDet').open=true;setStatus('ใส่ API Key ก่อน','warn');return}
+  if(!S.track && !(await startCam()))return;
+  S.running=true;keepAwake();
+  $('btnStart').textContent='⏸ หยุด';$('btnNow').disabled=false;$('btnAuto').disabled=false;
+  setStatus('กำลังดูซับ...','ok');
+  S.timer=setInterval(tick,500);
+};
+function stop(){
+  S.running=false;clearInterval(S.timer);
+  $('btnStart').textContent='▶ เริ่ม';setStatus('หยุดแล้ว');
+  try{S.wake&&S.wake.release()}catch(e){}
+}
+$('btnNow').onclick=()=>{if(S.track)send(true)};
+
+// ---------- frame analysis ----------
+function cropRect(){
+  const vw=vid.videoWidth,vh=vid.videoHeight;
+  const top=+$('sTop').value/100,h=Math.min(+$('sH').value,100-+$('sTop').value)/100,side=+$('sSide').value/100;
+  return {sx:vw*side,sy:vh*top,sw:vw*(1-2*side),sh:vh*h};
+}
+function getMask(){
+  const r=cropRect();if(!r.sw||!r.sh)return null;
+  ctxS.drawImage(vid,r.sx,r.sy,r.sw,r.sh,0,0,96,24);
+  const d=ctxS.getImageData(0,0,96,24).data,th=+$('sBright').value;
+  const m=new Uint8Array(96*24);let bright=0;
+  for(let i=0,j=0;i<d.length;i+=4,j++){const l=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];if(l>th){m[j]=1;bright++}}
+  return {m,frac:bright/m.length};
+}
+function diff(a,b){if(!a||!b)return 1;let n=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i])n++;return n/a.length}
+
+function tick(){
+  if(!S.running||!S.auto||S.busy||!vid.videoWidth)return;
+  const now=Date.now();
+  if(now<S.backoffUntil){setStatus('โควตาเต็ม รอ '+Math.ceil((S.backoffUntil-now)/1000)+' วิ','warn');return}
+  const mk=getMask();if(!mk)return;
+  const prev=S.prevMask;S.prevMask=mk.m;
+  if(mk.frac<0.004){setStatus('ไม่พบตัวหนังสือในกรอบ');return}
+  if(diff(mk.m,prev)>0.06){setStatus('ภาพกำลังเปลี่ยน...');return}       // wait until frame settles
+  if(S.lastMask&&diff(mk.m,S.lastMask)<0.035){setStatus('ซับเดิม','ok');return} // same subtitle
+  if(now-S.lastSend<(+$('sGap').value)*1000)return;
+  send(false,mk.m);
+}
+
+function grabJpeg(){
+  const r=cropRect(),scale=Math.min(1,1024/r.sw);
+  cBig.width=Math.round(r.sw*scale);cBig.height=Math.round(r.sh*scale);
+  ctxB.drawImage(vid,r.sx,r.sy,r.sw,r.sh,0,0,cBig.width,cBig.height);
+  const url=cBig.toDataURL('image/jpeg',0.85);
+  $('thumb').src=url;$('thumb').classList.remove('hide');
+  return url.split(',')[1];
+}
+
+// ---------- Gemini ----------
+function buildPrompt(){
+  const ctx=S.history.slice(-4).map(h=>(h.speaker?h.speaker+': ':'')+h.en).join('\n')||'(none)';
+  return `You are a live subtitle translator for the video game Grand Theft Auto VI.
+The image is a phone-camera photo of the subtitle area on a TV screen (may be slightly blurry, angled, or have glare).
+1. Read the English subtitle text exactly. Ignore HUD numbers, minimap, button prompts and reflections.
+2. If a speaker name appears before a colon or in a different color, put it in "speaker".
+3. Translate into natural, casual spoken Thai like Thai gamers talk. Keep character names, brands and place names in English. Translate slang and profanity by meaning, not word-for-word.
+Recent previous lines for context:
+${ctx}
+Return ONLY JSON: {"has_text":boolean,"speaker":string,"en":string,"th":string}
+If there is no readable subtitle, return has_text=false and empty strings.`;
+}
+async function callGemini(b64,prompt){
+  const key=store.get('key',''),model=store.get('model','gemini-flash-latest');
+  const gen={temperature:0.3,responseMimeType:'application/json'};
+  if(!S.noThinking)gen.thinkingConfig={thinkingBudget:0};
+  const parts=[{text:prompt}];if(b64)parts.push({inlineData:{mimeType:'image/jpeg',data:b64}});
+  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
+    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:gen})});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    const msg=data.error?.message||('HTTP '+res.status);
+    if(res.status===400&&/thinking/i.test(msg)&&!S.noThinking){S.noThinking=true;store.set('noThink','1');return callGemini(b64,prompt)}
+    const err=new Error(msg);err.status=res.status;throw err;
+  }
+  const txt=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').replace(/```json|```/g,'').trim();
+  return txt;
+}
+async function send(force,mask){
+  if(S.busy)return;
+  S.busy=true;S.lastSend=Date.now();
+  setStatus('กำลังแปล...','ok');
+  try{
+    const b64=grabJpeg();
+    const txt=await callGemini(b64,buildPrompt());
+    S.count++;$('quota').textContent='ส่งไปแปลแล้ว '+S.count+' ครั้งในรอบนี้';
+    let j;try{j=JSON.parse(txt)}catch(e){throw new Error('อ่านผลลัพธ์ไม่ได้')}
+    S.lastMask=mask||getMask()?.m||null;
+    if(!j.has_text||!j.en){setStatus('ไม่พบซับ',''); if(force)showCur({th:'(ไม่พบซับในกรอบ)',en:'',speaker:''});return}
+    const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(norm(j.en)===norm(S.lastEn)){setStatus('ซับเดิม','ok');return}
+    S.lastEn=j.en;
+    const item={speaker:String(j.speaker||''),en:String(j.en),th:String(j.th||'')};
+    S.history.push(item);if(S.history.length>200)S.history.shift();
+    showCur(item);renderHist();speak(item.th);
+    setStatus('แปลแล้ว','ok');
+  }catch(e){
+    if(e.status===429){S.backoffUntil=Date.now()+30000;setStatus('ชนโควตาฟรี พัก 30 วิ','warn')}
+    else if(e.status===400||e.status===403){setStatus('Key/โมเดลมีปัญหา','err');showCur({th:'เกิดข้อผิดพลาด',en:e.message,speaker:''});stop()}
+    else setStatus('ผิดพลาด: '+e.message,'err');
+  }finally{S.busy=false}
+}
+$('btnTest').onclick=async()=>{
+  store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-latest');
+  setStatus('กำลังทดสอบ...');
+  try{const t=await callGemini(null,'Return JSON {"has_text":true,"speaker":"","en":"ok","th":"ใช้งานได้"}');
+    const j=JSON.parse(t);setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK',speaker:''})}
+  catch(e){setStatus('ใช้ไม่ได้','err');showCur({th:'ทดสอบไม่ผ่าน',en:e.message,speaker:''})}
+};
+
+// ---------- UI ----------
+function showCur(it){$('curSpk').textContent=it.speaker||'';$('curTh').textContent=it.th||'';$('curEn').textContent=it.en||''}
+function renderHist(){
+  const ul=$('hist');ul.textContent='';
+  for(const h of S.history.slice().reverse()){
+    const li=document.createElement('li');
+    if(h.speaker){const s=document.createElement('div');s.className='sp';s.textContent=h.speaker;li.appendChild(s)}
+    const t=document.createElement('div');t.className='th';t.textContent=h.th;li.appendChild(t);
+    const e=document.createElement('div');e.className='en';e.textContent=h.en;li.appendChild(e);
+    ul.appendChild(li);
+  }
+}
+function speak(t){
+  if(!S.tts||!t||!('speechSynthesis' in window))return;
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='th-TH';u.rate=1.1;
+    const v=speechSynthesis.getVoices().find(v=>v.lang&&v.lang.toLowerCase().startsWith('th'));if(v)u.voice=v;
+    speechSynthesis.speak(u)}catch(e){}
+}
+}
+</script>
+</body>
+</html>
