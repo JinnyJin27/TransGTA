@@ -87,7 +87,7 @@ details summary{cursor:pointer;font-weight:600;min-height:32px}
       <label for="key">Gemini API Key (เก็บไว้ในเครื่องนี้เท่านั้น)</label>
       <input id="key" type="password" placeholder="AIza..." autocomplete="off">
       <label for="model">ชื่อโมเดล</label>
-      <input id="model" type="text" value="gemini-flash-lite-latest">
+      <input id="model" type="text" value="gemini-flash-lite-latest" list="modelList"><datalist id="modelList"></datalist>
       <p class="hint">เร็วสุด: gemini-flash-lite-latest · อ่านแม่นกว่าแต่ช้ากว่า: gemini-flash-latest</p>
       <div class="grid2">
         <div><label for="sGap">เว้นระยะส่งขั้นต่ำ: <b id="gapV">4</b> วิ</label><input id="sGap" type="range" min="2" max="12" value="4"></div>
@@ -257,8 +257,8 @@ async function callGemini(b64,prompt){
   clearTimeout(to);
   const data=await res.json().catch(()=>({}));
   if(!res.ok){
-    const msg=data.error?.message||('HTTP '+res.status);
-    if(res.status===400&&!/api key/i.test(msg)&&tm<3){log('โหมด '+tm+' ใช้ไม่ได้ ('+msg+') ลองโหมด '+(tm+1));store.set('thinkMode',String(tm+1));return callGemini(b64,prompt)}
+    const msg=((data.error?.status||'')+' '+(data.error?.message||('HTTP '+res.status))).trim();
+    if(res.status===400&&!/api key|credential|auth/i.test(msg)&&tm<3){log('โหมด '+tm+' ใช้ไม่ได้ ('+msg+') ลองโหมด '+(tm+1));store.set('thinkMode',String(tm+1));return callGemini(b64,prompt)}
     const err=new Error(msg);err.status=res.status;throw err;
   }
   const txt=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').replace(/```json|```/g,'').trim();
@@ -313,13 +313,35 @@ function log(msg,detail){
   if(logs.length>30)logs.pop();
   $('logBox').textContent=logs.join('\n');
 }
+async function listModels(){
+  const key=store.get('key','');
+  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{headers:{'x-goog-api-key':key}});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){const e=new Error((data.error?.status||'')+' '+(data.error?.message||'HTTP '+res.status));e.status=res.status;throw e}
+  return (data.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace('models/',''));
+}
 $('btnTest').onclick=async()=>{
   store.set('thinkMode','0');
-  store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');
+  const k=$('key').value.trim();
+  store.set('key',k);store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');
+  log('เริ่มทดสอบ · key ขึ้นต้น '+k.slice(0,3)+' ยาว '+k.length+' ตัว · โมเดล '+store.get('model',''));
   setStatus('กำลังทดสอบ...');
+  // step 1: is the key accepted at all?
+  let models=[];
+  try{models=await listModels();log('ขั้น 1 ผ่าน: key ใช้ได้ เห็น '+models.length+' โมเดล',models.filter(m=>/flash/.test(m)).join(', '))}
+  catch(e){log('ขั้น 1 ไม่ผ่าน: key ถูกปฏิเสธ ('+(e.status||'')+') '+e.message);setStatus('Key ใช้ไม่ได้','err');showCur({th:'Key ใช้ไม่ได้',en:e.message,speaker:''});return}
+  // fill model suggestions
+  const dl=$('modelList');dl.textContent='';for(const m of models){const o=document.createElement('option');o.value=m;dl.appendChild(o)}
+  const cur=store.get('model','');
+  if(models.length&&!models.includes(cur)){
+    const pick=models.find(m=>m==='gemini-flash-lite-latest')||models.find(m=>m==='gemini-flash-latest')||models.find(m=>/flash-lite/.test(m)&&!/preview|tts|image|audio|live/.test(m))||models.find(m=>/flash/.test(m)&&!/preview|tts|image|audio|live/.test(m));
+    if(pick){log('โมเดล '+cur+' ไม่มีในบัญชีนี้ เปลี่ยนเป็น '+pick);store.set('model',pick);$('model').value=pick}
+  }
+  // step 2: can we generate?
   try{const t=await callGemini(null,'Return JSON {"has_text":true,"speaker":"","en":"ok","th":"ใช้งานได้"}');
-    log('ทดสอบ Key ผ่าน',t);const j=parseResult(t)||{};setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK · '+store.get('model',''),speaker:''})}
-  catch(e){log('ทดสอบ Key ไม่ผ่าน '+(e.status||'')+': '+e.message);setStatus('ใช้ไม่ได้','err');showCur({th:'ทดสอบไม่ผ่าน',en:e.message,speaker:''})}
+    log('ขั้น 2 ผ่าน: แปลได้ (โหมด '+store.get('thinkMode','0')+')',t);const j=parseResult(t)||{};
+    setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK · '+store.get('model',''),speaker:''})}
+  catch(e){log('ขั้น 2 ไม่ผ่าน ('+(e.status||'')+') '+e.message);setStatus('เรียกโมเดลไม่ได้','err');showCur({th:'Key ใช้ได้ แต่เรียกโมเดลไม่ได้',en:e.message,speaker:''})}
 };
 
 // ---------- UI ----------
