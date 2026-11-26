@@ -99,6 +99,14 @@ details summary{cursor:pointer;font-weight:600;min-height:32px}
   </section>
 
   <section class="card">
+    <details id="logDet">
+      <summary>🧾 บันทึกการทำงาน (แคปส่วนนี้ส่งมาถ้ามีปัญหา)</summary>
+      <div class="row" style="margin:8px 0"><button id="btnCopyLog">คัดลอกบันทึก</button></div>
+      <pre id="logBox" style="white-space:pre-wrap;font-size:12px;color:var(--mut);max-height:40vh;overflow-y:auto;margin:0">ยังไม่มีบันทึก</pre>
+    </details>
+  </section>
+
+  <section class="card">
     <div class="row" style="justify-content:space-between"><b>ประวัติบทพูด</b><button id="btnClear">ล้าง</button></div>
     <ul id="hist"></ul>
   </section>
@@ -129,6 +137,7 @@ ttsBtn();
 $('btnTts').onclick=()=>{S.tts=!S.tts;store.set('tts',S.tts?'1':'0');ttsBtn();if(S.tts)speak('เปิดเสียงอ่านภาษาไทยแล้ว')};
 $('btnAuto').onclick=()=>{S.auto=!S.auto;$('btnAuto').textContent='อัตโนมัติ: '+(S.auto?'เปิด':'ปิด');setStatus(S.auto?'โหมดอัตโนมัติ':'โหมดกดเอง','ok')};
 $('btnClear').onclick=()=>{S.history=[];renderHist()};
+$('btnCopyLog').onclick=()=>{navigator.clipboard?.writeText(logs.join('\n')).then(()=>setStatus('คัดลอกแล้ว','ok')).catch(()=>{})};
 
 function setStatus(t,cls){const s=$('status');s.textContent=t;s.className=cls||''}
 function updateBox(){
@@ -253,37 +262,61 @@ async function callGemini(b64,prompt){
   const txt=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').replace(/```json|```/g,'').trim();
   return txt;
 }
+function parseResult(txt){
+  let j;
+  try{j=JSON.parse(txt)}catch(e){const m=txt.match(/\{[\s\S]*\}/);if(m){try{j=JSON.parse(m[0])}catch(e2){}}}
+  if(Array.isArray(j))j=j[0];
+  if(!j||typeof j!=='object')return null;
+  const low={};for(const k in j)low[k.toLowerCase()]=j[k];
+  const en=String(low.en||low.english||low.text||low.subtitle||'').trim();
+  const th=String(low.th||low.thai||low.translation||'').trim();
+  return {has:!!(en||th)&&low.has_text!==false,en,th,speaker:String(low.speaker||'').trim()};
+}
 async function send(force,mask){
   if(S.busy)return;
   S.busy=true;S.lastSend=Date.now();
   const t0=Date.now();
   const tk=setInterval(()=>setStatus('กำลังแปล... '+((Date.now()-t0)/1000).toFixed(1)+' วิ','ok'),200);
+  let txt='';
   try{
     const b64=grabJpeg();
-    const txt=await callGemini(b64,buildPrompt());
-    S.count++;$('quota').textContent='ส่งไปแปลแล้ว '+S.count+' ครั้ง · ครั้งล่าสุดใช้ '+((Date.now()-t0)/1000).toFixed(1)+' วิ';
-    let j;try{j=JSON.parse(txt)}catch(e){throw new Error('อ่านผลลัพธ์ไม่ได้')}
+    txt=await callGemini(b64,buildPrompt());
+    const sec=((Date.now()-t0)/1000).toFixed(1);
+    S.count++;$('quota').textContent='ส่งไปแปลแล้ว '+S.count+' ครั้ง · ครั้งล่าสุดใช้ '+sec+' วิ';
     S.lastMask=mask||getMask()?.m||null;
-    if(!j.has_text||!j.en){setStatus('ไม่พบซับ',''); if(force)showCur({th:'(ไม่พบซับในกรอบ)',en:'',speaker:''});return}
-    const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
-    if(norm(j.en)===norm(S.lastEn)){setStatus('ซับเดิม','ok');return}
-    S.lastEn=j.en;
-    const item={speaker:String(j.speaker||''),en:String(j.en),th:String(j.th||'')};
+    const r=parseResult(txt);
+    if(!r){log('ตอบกลับอ่านไม่ได้ ('+sec+' วิ)',txt);clearInterval(tk);setStatus('อ่านผลไม่ได้','err');$('curEn').textContent='⚠ AI ตอบกลับในรูปแบบที่อ่านไม่ได้ ดูที่ "บันทึกการทำงาน"';return}
+    if(!r.has){log('AI ไม่เห็นซับในภาพ ('+sec+' วิ)',txt);clearInterval(tk);setStatus('AI ไม่เห็นซับ','warn');
+      $('curEn').textContent='(ล่าสุด: AI มองไม่เห็นซับในกรอบ ดูภาพเล็กใต้กล้องว่าครอบซับพอดีไหม)';return}
+    const norm=x=>x.toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(r.en&&norm(r.en)===norm(S.lastEn)){log('ซับเดิม ข้าม ('+sec+' วิ)',r.en);clearInterval(tk);setStatus('ซับเดิม','ok');return}
+    S.lastEn=r.en;
+    const item={speaker:r.speaker,en:r.en,th:r.th||'(ไม่มีคำแปล)'};
     S.history.push(item);if(S.history.length>200)S.history.shift();
     showCur(item);renderHist();speak(item.th);
-    setStatus('แปลแล้ว','ok');
+    log('แปลสำเร็จ ('+sec+' วิ)',r.th);
+    clearInterval(tk);setStatus('แปลแล้ว ✓','ok');
   }catch(e){
-    if(e.status===429){S.backoffUntil=Date.now()+30000;setStatus('ชนโควตาฟรี พัก 30 วิ','warn')}
-    else if(e.status===400||e.status===403){setStatus('Key/โมเดลมีปัญหา','err');showCur({th:'เกิดข้อผิดพลาด',en:e.message,speaker:''});stop()}
+    clearInterval(tk);
+    log('ERROR '+(e.status||'')+': '+e.message,txt);
+    if(e.status===429){S.backoffUntil=Date.now()+30000;setStatus('ชนโควตาฟรี พัก 30 วิ','warn');$('curEn').textContent='⚠ ชนโควตาฟรี: '+e.message}
+    else if(e.status===400||e.status===403||e.status===404){stop();setStatus('Key/โมเดลมีปัญหา','err');showCur({th:'เกิดข้อผิดพลาด',en:e.message,speaker:''})}
     else{setStatus('ผิดพลาด','err');$('curEn').textContent='⚠ '+e.message}
   }finally{clearInterval(tk);S.busy=false}
+}
+const logs=[];
+function log(msg,detail){
+  const t=new Date().toLocaleTimeString('th-TH');
+  logs.unshift(t+'  '+msg+(detail?'\n   → '+String(detail).slice(0,300):''));
+  if(logs.length>30)logs.pop();
+  $('logBox').textContent=logs.join('\n');
 }
 $('btnTest').onclick=async()=>{
   store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');
   setStatus('กำลังทดสอบ...');
   try{const t=await callGemini(null,'Return JSON {"has_text":true,"speaker":"","en":"ok","th":"ใช้งานได้"}');
-    const j=JSON.parse(t);setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK · '+store.get('model',''),speaker:''})}
-  catch(e){setStatus('ใช้ไม่ได้','err');showCur({th:'ทดสอบไม่ผ่าน',en:e.message,speaker:''})}
+    log('ทดสอบ Key ผ่าน',t);const j=parseResult(t)||{};setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK · '+store.get('model',''),speaker:''})}
+  catch(e){log('ทดสอบ Key ไม่ผ่าน '+(e.status||'')+': '+e.message);setStatus('ใช้ไม่ได้','err');showCur({th:'ทดสอบไม่ผ่าน',en:e.message,speaker:''})}
 };
 
 // ---------- UI ----------
