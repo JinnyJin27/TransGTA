@@ -87,7 +87,8 @@ details summary{cursor:pointer;font-weight:600;min-height:32px}
       <label for="key">Gemini API Key (เก็บไว้ในเครื่องนี้เท่านั้น)</label>
       <input id="key" type="password" placeholder="AIza..." autocomplete="off">
       <label for="model">ชื่อโมเดล</label>
-      <input id="model" type="text" value="gemini-flash-latest">
+      <input id="model" type="text" value="gemini-flash-lite-latest">
+      <p class="hint">เร็วสุด: gemini-flash-lite-latest · อ่านแม่นกว่าแต่ช้ากว่า: gemini-flash-latest</p>
       <div class="grid2">
         <div><label for="sGap">เว้นระยะส่งขั้นต่ำ: <b id="gapV">4</b> วิ</label><input id="sGap" type="range" min="2" max="12" value="4"></div>
         <div><label for="sBright">ความสว่างตัวหนังสือ (ลดลงถ้าแอปไม่ยอมแปล): <b id="brV">170</b></label><input id="sBright" type="range" min="90" max="240" value="170"></div>
@@ -115,12 +116,13 @@ const S={running:false,auto:true,tts:store.get('tts','0')==='1',busy:false,lastS
 
 // ---------- settings ----------
 $('key').value=store.get('key','');
-$('model').value=store.get('model','gemini-flash-latest');
+if(store.get('model','')==='gemini-flash-latest')store.set('model','gemini-flash-lite-latest');
+$('model').value=store.get('model','gemini-flash-lite-latest');
 for(const id of ['sTop','sH','sSide','sGap','sBright']) $(id).value=store.get(id,$(id).value);
 const showVals=()=>{$('gapV').textContent=$('sGap').value;$('brV').textContent=$('sBright').value};
 showVals();
 for(const id of ['sTop','sH','sSide','sGap','sBright']) $(id).addEventListener('input',()=>{store.set(id,$(id).value);showVals();updateBox();S.lastMask=null});
-$('btnSave').onclick=()=>{store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-latest');setStatus('บันทึกแล้ว','ok')};
+$('btnSave').onclick=()=>{store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');setStatus('บันทึกแล้ว','ok')};
 if(!$('key').value) $('setDet').open=true;
 const ttsBtn=()=>$('btnTts').textContent='🔈 อ่านออกเสียง: '+(S.tts?'เปิด':'ปิด');
 ttsBtn();
@@ -201,10 +203,10 @@ function tick(){
 }
 
 function grabJpeg(){
-  const r=cropRect(),scale=Math.min(1,1024/r.sw);
+  const r=cropRect(),scale=Math.min(1,800/r.sw);
   cBig.width=Math.round(r.sw*scale);cBig.height=Math.round(r.sh*scale);
   ctxB.drawImage(vid,r.sx,r.sy,r.sw,r.sh,0,0,cBig.width,cBig.height);
-  const url=cBig.toDataURL('image/jpeg',0.85);
+  const url=cBig.toDataURL('image/jpeg',0.75);
   $('thumb').src=url;$('thumb').classList.remove('hide');
   return url.split(',')[1];
 }
@@ -222,18 +224,30 @@ ${ctx}
 Return ONLY JSON: {"has_text":boolean,"speaker":string,"en":string,"th":string}
 If there is no readable subtitle, return has_text=false and empty strings.`;
 }
+// thinking modes to try, fastest first: 0 = thinkingBudget 0, 1 = thinkingLevel minimal, 2 = none
 async function callGemini(b64,prompt){
-  const key=store.get('key',''),model=store.get('model','gemini-flash-latest');
+  const key=store.get('key',''),model=store.get('model','gemini-flash-lite-latest');
   const gen={temperature:0.3,responseMimeType:'application/json'};
-  if(!S.noThinking)gen.thinkingConfig={thinkingBudget:0};
+  const tm=+store.get('thinkMode','0');
+  if(tm===0)gen.thinkingConfig={thinkingBudget:0};
+  else if(tm===1)gen.thinkingConfig={thinkingLevel:'minimal'};
   const parts=[{text:prompt}];if(b64)parts.push({inlineData:{mimeType:'image/jpeg',data:b64}});
-  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
-    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
-    body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:gen})});
+  const ac=new AbortController(),to=setTimeout(()=>ac.abort(),15000);
+  let res;
+  try{
+    res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
+      method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','x-goog-api-key':key},
+      body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:gen})});
+  }catch(e){
+    clearTimeout(to);
+    const err=new Error(e.name==='AbortError'?'หมดเวลา 15 วิ (โมเดลตอบช้าเกินไป ลองเปลี่ยนเป็น gemini-flash-lite-latest)':'เชื่อมต่อไม่ได้: '+e.message);
+    err.status=0;throw err;
+  }
+  clearTimeout(to);
   const data=await res.json().catch(()=>({}));
   if(!res.ok){
     const msg=data.error?.message||('HTTP '+res.status);
-    if(res.status===400&&/thinking/i.test(msg)&&!S.noThinking){S.noThinking=true;store.set('noThink','1');return callGemini(b64,prompt)}
+    if(res.status===400&&/thinking/i.test(msg)&&tm<2){store.set('thinkMode',String(tm+1));return callGemini(b64,prompt)}
     const err=new Error(msg);err.status=res.status;throw err;
   }
   const txt=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('').replace(/```json|```/g,'').trim();
@@ -242,11 +256,12 @@ async function callGemini(b64,prompt){
 async function send(force,mask){
   if(S.busy)return;
   S.busy=true;S.lastSend=Date.now();
-  setStatus('กำลังแปล...','ok');
+  const t0=Date.now();
+  const tk=setInterval(()=>setStatus('กำลังแปล... '+((Date.now()-t0)/1000).toFixed(1)+' วิ','ok'),200);
   try{
     const b64=grabJpeg();
     const txt=await callGemini(b64,buildPrompt());
-    S.count++;$('quota').textContent='ส่งไปแปลแล้ว '+S.count+' ครั้งในรอบนี้';
+    S.count++;$('quota').textContent='ส่งไปแปลแล้ว '+S.count+' ครั้ง · ครั้งล่าสุดใช้ '+((Date.now()-t0)/1000).toFixed(1)+' วิ';
     let j;try{j=JSON.parse(txt)}catch(e){throw new Error('อ่านผลลัพธ์ไม่ได้')}
     S.lastMask=mask||getMask()?.m||null;
     if(!j.has_text||!j.en){setStatus('ไม่พบซับ',''); if(force)showCur({th:'(ไม่พบซับในกรอบ)',en:'',speaker:''});return}
@@ -260,14 +275,14 @@ async function send(force,mask){
   }catch(e){
     if(e.status===429){S.backoffUntil=Date.now()+30000;setStatus('ชนโควตาฟรี พัก 30 วิ','warn')}
     else if(e.status===400||e.status===403){setStatus('Key/โมเดลมีปัญหา','err');showCur({th:'เกิดข้อผิดพลาด',en:e.message,speaker:''});stop()}
-    else setStatus('ผิดพลาด: '+e.message,'err');
-  }finally{S.busy=false}
+    else{setStatus('ผิดพลาด','err');$('curEn').textContent='⚠ '+e.message}
+  }finally{clearInterval(tk);S.busy=false}
 }
 $('btnTest').onclick=async()=>{
-  store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-latest');
+  store.set('key',$('key').value.trim());store.set('model',$('model').value.trim()||'gemini-flash-lite-latest');
   setStatus('กำลังทดสอบ...');
   try{const t=await callGemini(null,'Return JSON {"has_text":true,"speaker":"","en":"ok","th":"ใช้งานได้"}');
-    const j=JSON.parse(t);setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK',speaker:''})}
+    const j=JSON.parse(t);setStatus('Key ใช้ได้ ✓','ok');showCur({th:j.th||'ใช้งานได้',en:'API key OK · '+store.get('model',''),speaker:''})}
   catch(e){setStatus('ใช้ไม่ได้','err');showCur({th:'ทดสอบไม่ผ่าน',en:e.message,speaker:''})}
 };
 
